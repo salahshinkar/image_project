@@ -296,8 +296,7 @@ def split_dataset(pairs, test_size=0.30, random_state=42):
         random_state=random_state
     )
 
-    print("Training Samples:", len(train_pairs))
-    print("Testing Samples:", len(test_pairs))
+
 
     return train_pairs, test_pairs
 
