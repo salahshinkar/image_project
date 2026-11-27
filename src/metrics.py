@@ -192,7 +192,6 @@ def load_kvasir_sample(
         all_files = archive.namelist()
         image_extensions = (".jpg", ".jpeg", ".png", ".bmp")
 
-        # Extract in exact order of archive (matches 01_image_analysis.ipynb and data.py)
         image_files = []
         mask_map = {}
 
@@ -231,45 +230,7 @@ def load_kvasir_sample(
 
 
 # ==========================================
-# Cell 7: Noise Degradation Functions (from data.py)
-# ==========================================
-
-def add_gaussian_noise(image: np.ndarray, seed: int = 42) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    noise = rng.normal(0, 25, image.shape)
-    noisy_image = image.astype(np.float32) + noise
-    return np.clip(noisy_image, 0, 255).astype(np.uint8)
-
-
-def add_salt_pepper_noise(image: np.ndarray, seed: int = 42, amount: float = 0.05) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    noisy_image = image.copy()
-    total_pixels = image.shape[0] * image.shape[1]
-    num_pixels = int(total_pixels * amount)
-    indices = rng.choice(total_pixels, num_pixels, replace=False)
-    rows = indices // image.shape[1]
-    cols = indices % image.shape[1]
-    half = num_pixels // 2
-    noisy_image[rows[:half], cols[:half]] = 255
-    noisy_image[rows[half:], cols[half:]] = 0
-    return noisy_image
-
-
-def add_speckle_noise(image: np.ndarray, seed: int = 42) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    noise = rng.normal(0, 0.1, image.shape)
-    noisy_image = image.astype(np.float32) * (1 + noise)
-    return np.clip(noisy_image, 0, 255).astype(np.uint8)
-
-
-def add_poisson_noise(image: np.ndarray, seed: int = 42) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    noisy_image = rng.poisson(image.astype(np.float32))
-    return np.clip(noisy_image, 0, 255).astype(np.uint8)
-
-
-# ==========================================
-# Cell 8: Hand-Crafted Verification Tests
+# Cell 7: Hand-Crafted Verification Tests
 # ==========================================
 
 def run_hand_crafted_tests() -> None:
@@ -399,7 +360,7 @@ def run_hand_crafted_tests() -> None:
 
 
 # ==========================================
-# Cell 9: Kvasir-SEG Dataset Evaluation Test
+# Cell 8: Kvasir-SEG Dataset Evaluation Test
 # ==========================================
 
 def run_kvasir_dataset_evaluation(
@@ -407,8 +368,8 @@ def run_kvasir_dataset_evaluation(
     sample_index: int = 0
 ) -> None:
     """
-    Demonstrate MSE, PSNR, and IoU on the exact dataset samples
-    matching the output of data.py and 01_image_analysis.ipynb.
+    Demonstrate MSE, PSNR, and IoU on real dataset samples
+    from Kvasir-SEG (ck2bxiswtxuw80838qkisqjwz).
     """
     print("\n" + "=" * 60)
     print("Running Metrics Validation on Dataset (ck2bxiswtxuw80838qkisqjwz)")
@@ -420,42 +381,20 @@ def run_kvasir_dataset_evaluation(
         print(f"Original Image Shape: {image.shape}")
         print(f"Original Mask Shape : {gt_mask.shape} (Polyp pixel count: {gt_mask.sum()})")
 
-        # Apply degradations matching 01_image_analysis.ipynb
-        gaussian_noisy = add_gaussian_noise(image)
-        sp_noisy = add_salt_pepper_noise(image)
-        speckle_noisy = add_speckle_noise(image)
-        poisson_noisy = add_poisson_noise(image)
+        # Simulate noisy image and restoration for MSE & PSNR evaluation
+        np.random.seed(42)
+        noise = np.random.normal(0, 20, image.shape)
+        noisy_image = np.clip(image.astype(np.float64) + noise, 0, 255).astype(np.uint8)
+        restored_image = cv2.GaussianBlur(noisy_image, (5, 5), 0)
 
-        print("\n[Controlled Degradation Quality Evaluation - MSE & PSNR]")
-        degradations = [
-            ("Gaussian Noise", gaussian_noisy),
-            ("Salt & Pepper", sp_noisy),
-            ("Speckle Noise", speckle_noisy),
-            ("Poisson Noise", poisson_noisy),
-        ]
+        noisy_mse = calculate_mse(image, noisy_image)
+        noisy_psnr = calculate_psnr(image, noisy_image)
+        restored_mse = calculate_mse(image, restored_image)
+        restored_psnr = calculate_psnr(image, restored_image)
 
-        for name, noisy in degradations:
-            mse_val = calculate_mse(image, noisy)
-            psnr_val = calculate_psnr(image, noisy)
-            print(f"  {name:<15} -> MSE: {mse_val:8.2f} | PSNR: {psnr_val:5.2f} dB")
-
-        # Apply restoration filters matching data.py
-        mean_restored = cv2.blur(gaussian_noisy, (5, 5))
-        gaussian_restored = cv2.GaussianBlur(gaussian_noisy, (5, 5), 1.5)
-        median_restored = cv2.medianBlur(gaussian_noisy, 5)
-
-        print("\n[Restoration Quality Evaluation (Gaussian Input) - MSE & PSNR]")
-        restorations = [
-            ("Noisy Gaussian", gaussian_noisy),
-            ("Mean Filter (5x5)", mean_restored),
-            ("Gaussian Filter", gaussian_restored),
-            ("Median Filter (5x5)", median_restored),
-        ]
-
-        for name, restored in restorations:
-            mse_val = calculate_mse(image, restored)
-            psnr_val = calculate_psnr(image, restored)
-            print(f"  {name:<20} -> MSE: {mse_val:8.2f} | PSNR: {psnr_val:5.2f} dB")
+        print("\n[Image Quality Evaluation - MSE & PSNR]")
+        print(f"  Original vs Noisy Image     -> MSE: {noisy_mse:8.2f} | PSNR: {noisy_psnr:5.2f} dB")
+        print(f"  Original vs Restored Image  -> MSE: {restored_mse:8.2f} | PSNR: {restored_psnr:5.2f} dB")
 
         # Evaluate segmentation mask IoU
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
@@ -479,7 +418,7 @@ def run_kvasir_dataset_evaluation(
 
 
 # ==========================================
-# Cell 10: Main Execution
+# Cell 9: Main Execution
 # ==========================================
 
 if __name__ == "__main__":
